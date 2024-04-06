@@ -19,12 +19,20 @@ Contém um monte de funções que não são comuns nos bots do Discordd, entre e
 * ``;correio`` - Envie uma mensagem anônimo direcionada a alguém num canal [REQUER ATIVAÇÃO]
 ---
 **Módulos** 
+
 Os módulos são funcionalidades que você pode ativar ou desativar separadamente (``;bottle``, ``;correio``)
 * ``;config`` - Ver a configuração dos módulos no servidor
 * ``;ativar`` - Ativar um módulo
 * ``;desativar`` - Desativar um módulo
 
 A programação é bastante comentada, para que você possa modificar do jeito que quiser.
+
+Você deve mexer no arquivo de configuração (config.py) antes de executar o código, as instruções se encontram lá.
+
+### Dependências
+Discord.py [2.3.2] - ``pip install pip install discord.py``
+
+Pytz [2023.3] - ``pip install pytz``
 
 ## Avisos
 
@@ -33,6 +41,8 @@ A programação é bastante comentada, para que você possa modificar do jeito q
 - A única forma de ver o criador de uma mensagem anônima é por meio do registro das logs.
 - O código NÃO foi feito com a intenção de se tornar algo sério, então espere algumas gambiarras ali e aqui.
 - Mais uma vez falando, esse projeto não tem nenhum ligamento com o CleverBot, considere isso como uma Fan-Made.
+
+> Projeto livre, faça o que quiser com o código. Se encontrar algum bug, por favor me avise ;]
 
 ![kkkk imagem falhou](https://images7.memedroid.com/images/UPLOADED866/5fb051be3b4b0.jpeg)
 
