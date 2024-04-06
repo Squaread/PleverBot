@@ -7,43 +7,52 @@ import re
 import asyncio
 import platform
 from discord.ui import Button, View
-
-import pytz
 import json
-from datetime import datetime
 
 # Importar configurações | Import config
 from config import TOKEN
 from config import bot_prefix
 from config import bot_log_channel
 
-# Fuso horario | Time zone
-start_time = datetime.utcnow()
-# Custom commands cache
-custom_commands = {}
-
-time_zone_utc3 = pytz.timezone('America/Sao_Paulo') # Time zone, change to your region (optional), example: America/New_York
-
-# Carregar comandos customizados | Load custom commands
+# ==== Carregar comandos customizados | Load custom commands ====
 try:
     with open('custom.json', 'r', encoding='utf-8') as json_file:
-        try:
          custom_commands = json.load(json_file)
-        except:
-           custom_commands = {}
-        
-        print("\n [ ✅ ] Custom commands loaded \n")
-        
+         print("\n [ ✅ ] Custom commands loaded - custom.json \n")
+
 except FileNotFoundError:
     custom_commands = {}
-    print("\n [ ❌ ] FileNotFoundError - Custom commands \n")
+    print("\n [ ❌ ] FileNotFoundError - custom.json \n")
 
-# Carregar blacklist | Load blacklist
-with open('ban.json', 'r') as ban_file:
-    ban_users = json.load(ban_file)
-with open('servers_data.json', 'r', encoding='utf-8') as f:
-    servers_data = json.load(f)
+# ==== Carregar blacklist | Load blacklist ====
+try:
+    with open('ban.json', 'r') as ban_file:
+        ban_users = json.load(ban_file)
+        print("\n [ ✅ ] Blacklist loaded - ban.json \n")  
 
+except FileNotFoundError:
+    ban_users = {}
+    print("\n [ ❌ ] FileNotFoundError - ban.json \n")
+
+# ==== Carregar dados dos servidores | Load server data ====
+try:
+    with open('servers_data.json', 'r', encoding='utf-8') as f:
+        servers_data = json.load(f)
+        print("\n [ ✅ ] Servers data loaded - servers_data.json \n")  
+
+except FileNotFoundError:
+    servers_data = {"servers": {}}
+    print("\n [ ❌ ] FileNotFoundError - servers_data.json \n")
+
+# ==================== Atualizar dados dos servidores no json | Update server data in json ====================
+def upServerData():
+    try:
+        with open('servers_data.json', 'w') as file:
+            json.dump(servers_data, file, indent=2)
+
+    except:
+        print("\n [ ❌ ] ERROR - servers_data.json \n")
+        
 # ============================================================ Bot ============================================================
 bot = commands.Bot(command_prefix =bot_prefix, intents=discord.Intents.all())
 
@@ -56,8 +65,29 @@ async def on_ready():
      await bot.tree.sync()
      print("✅ | Synchronized Commands")
     except Exception as e:
-     print (e)
+     print(e)
 
+     # Detectar se falta algum servidor no servers_data.json | Detect missing servers in servers_data.json 
+    for guild in bot.guilds:
+        guild_id = str(guild.id)
+
+        if guild_id not in servers_data["servers"]:
+            # Adicionar o servidor ao servers_data | Add the server to servers_data
+            servers_data["servers"][guild_id] = {
+                "bottle": {
+                    "enabled": False,
+                    "channel_id": None
+                },
+                "mail": {
+                    "enabled": False,
+                    "channel_id": None
+                }
+            }
+
+    # Atualizara dados servers_data.json | Update data servers_data.json
+    upServerData()
+
+    # Modificar status do bot, por exemplo, fazer aparecer que ele tá jogando um jogo | Modify the bot's status, for example, make it appear that it is playing a game
     async def change_activity():
          while True:
           await bot.change_presence(activity=discord.Activity(type=discord.ActivityType.playing, name="Carlinhos Simulator"), status=discord.Status.idle)
@@ -100,11 +130,6 @@ async def on_guild_join(guild):
    embed_new_guild = discord.Embed(title="New guild", description=f"**Server:** ``{guild.name}`` | ``{guild.id}`` \n **Owner:** ``{guild.owner}`` | ``{guild.owner.id}`` \n **Members:** ``{guild.member_count}``", color=0x1f8b4c)
    await log_channel.send(embed=embed_new_guild)
 
-# ==================== Atualizar dados dos servidores no json | Update server data in json ====================
-def upServerData():
-    with open('servers_data.json', 'w') as file:
-        json.dump(servers_data, file, indent=2)
-
 # ==================== Ignorar a mensagem CommandNotFound (alerta inutil e evita spam no console) | Ignore the CommandNotFound message (useless alert and avoids console spam) ====================
 @bot.event
 async def on_command_error(ctx, error):
@@ -138,7 +163,7 @@ async def on_message(message):
             for key, value in custom_commands.items():
              if i in key:      
               response = value['output']
-              print(message_content, " | ", key, " ", response)
+              #print(message_content, " | ", key, " ", response)
         
               key_split = key.split()
              
@@ -193,26 +218,23 @@ async def on_message(message):
     
     await bot.process_commands(message)    
 
-# ==================== Sicronizar comandos slash manualmente | Manually sync slash commands ====================
-@bot.command()
-@commands.is_owner() 
-async def sync2(ctx,guild=None):
-    
-    if guild == None:
-        await bot.tree.sync()
-    else:
-        await bot.tree.sync(guild=discord.Object(id=int(guild)))
-    await ctx.send("Sicronizado")
-@sync2.error
-async def sync_error():
-   pass
+# ==================== Sistema de Logs | Logs System ====================
+async def sendLog(title, description, color):
+    if bot_log_channel == 0: # Nenhum canal especificado | No channel specified
+        return
+    log_channel = bot.get_channel(bot_log_channel)
+    embed_log = discord.Embed(title=title, description=description, color=color)
+    try:
+        await log_channel.send(embed=embed_log) # Enviar log | Send log
+    except: # Caso ID invalido | Invalid ID case
+        print("[LOGS SYSTEM] Error when sending message, check that the ID is correct and that the bot has permission on the channel.")
    
 # ==================== Comando de ajuda | Help command ====================
 @bot.hybrid_command(name="ajuda", description="Tutorial")
 @commands.cooldown(1, 5, commands.BucketType.user)
 async def ajuda(ctx):
 
- embed_mainPage = discord.Embed(title="Ajuda - Comandos Gerais", description="Muitos comandos são por prefixo e slash, alguns são somente prefixo para evitar poluição. Todo comando com slash também é prefixo, mas nem todo de prefixo é slash\n\n- **/ajuda** ``Explicação dos comandos e funções``\n- **/bottle [message]** ``Envie uma mensagem para um servidor aleatório``\n- **/correio [user] [message]** ``Envie uma mensagem anônima para alguém num canal do servidor``\n- **/update** ``Ver mudanças na versão mais recente do bot``", color=0x7289da)
+ embed_mainPage = discord.Embed(title="Ajuda - Comandos Gerais", description="Muitos comandos são por prefixo e slash, alguns são somente prefixo para evitar poluição. Todo comando com slash também é prefixo, mas nem todo de prefixo é slash\n\n- **/ajuda** ``Explicação dos comandos e funções``\n- **/bottle [message]** ``Envie uma mensagem para um servidor aleatório``\n- **/correio [user] [message]** ``Envie uma mensagem anônima para alguém num canal do servidor``", color=0x7289da)
  embed_mainPage.set_thumbnail(url=bot.user.avatar)
  embed_mainPage.set_footer(text=f"{ctx.author} | {ctx.author.id}")
 
@@ -241,7 +263,7 @@ async def ajuda(ctx):
     
     embed_triggerMakecmdPage = discord.Embed(title="Ajuda - Trigger & Makecmd", color=0xe91e63)
     embed_triggerMakecmdPage.add_field(name="Trigger", value="- ``;maketrigger input: [trigger] output: [response] exact: [boolean (True or False)]``\n\n Cria um gatilho de texto que faz o bot enviar uma mensagem pré-definida. Se ``exact`` for False, ele será ativado mesmo se o gatilho estiver junto de outras palavras", inline=False)
-    embed_triggerMakecmdPage.add_field(name="Makecmd", value=f"- ``;makecmd input: [invoker] output: [response]``\n\n Parâmetros\n``%arg`` Obter o primeiro argumento após o invoker\n``%author`` Pegar quem acionou o comando\n``%random[number]`` Número aleatório de 1 até onde você limitou, exemplo: %random15 = 1 até 15\n``%randomMember`` Pegar um membro aleatório\n\n Exemplos:\n``;makecmd input: cavalos output: %author bebeu %random7 litros de água de cavalo``\n``;makecmd input: carlinhos output: %arg é %random100% carlinhos``\n\n ⛔ Evite colocar espaço nos invokers, tipo ``;make input: cavalos carlinhos output: vdd``. Pode acontecer comportamentos inesperados, será corrigido futuramente", inline=False)
+    embed_triggerMakecmdPage.add_field(name="Makecmd", value=f"- ``;makecmd input: [invoker] output: [response]``\n\n Parâmetros\n``%arg`` Obter o primeiro argumento após o invoker\n``%author`` Pegar quem acionou o comando\n``%random[number]`` Número aleatório de 1 até onde você limitou, exemplo: %random15 = 1 até 15\n``%randomMember`` Pegar um membro aleatório\n\n Exemplos:\n``;makecmd input: cavalos output: %author bebeu %random7 litros de água de cavalo``\n``;makecmd input: carlinhos output: %arg é %random100% carlinhos``\n\n ⛔ Evite colocar espaço nos invokers, tipo ``;make input: cavalos carlinhos output: vdd``. Pode acontecer comportamentos inesperados.", inline=False)
     embed_triggerMakecmdPage.set_thumbnail(url=bot.user.avatar)
     embed_triggerMakecmdPage.set_footer(text=f"{ctx.author} | {ctx.author.id}")
 
@@ -252,7 +274,7 @@ async def ajuda(ctx):
  button_rulesPage = Button(label="📚 | Diretrizes", style=discord.ButtonStyle.red)
  async def button_rulesPage_callback(interaction):
     
-    embed_rulesPage = discord.Embed(title="Os 7 Mandamentos Sagrados", description="Regras... Quem é que gosta de regras? Bem, elas existem, engole o choro e faz o L \n\n - 1º Não usarás o bot para fins maliciosos, ilegais ou que vão contra às [Diretrizes da Comunidade](https://discord.com/guidelines). \n- 2º Não usarás contas alternativas para obter benefícios, vantagens ou ganhos no bot (isso se aplica somente ao sistema de economia). \n- 3º Não burlarás banimento por meio de contas alternativas. \n- 4º Não enviarás conteúdo criminoso, >exageradamente< violento ou sexual nos Triggers e Comandos Customizáveis. \n- 5º Não enviarás nenhum tipo de propaganda/divulgação nos Comandos Customizáveis. \n- 6º Nunca forçarás o celeron do bot com comandos ou ações repetitivas com intuito de derrubar/prejudicar (coisa de bobão). \n- 7º Jamais compartilharás ou abusarás de uma falha no bot. Lembre-se, vacilão não dura muito.\n\n Última modificação: 28/01/2024", color=0x992d22)
+    embed_rulesPage = discord.Embed(title="Os 7 Mandamentos Sagrados", description="Regras... Quem é que gosta de regras? Bem, elas existem, engole o choro e faz o L \n\n - 1º Não usarás o bot para fins maliciosos, ilegais ou que vão contra às [Diretrizes da Comunidade](https://discord.com/guidelines). \n- 2º Não burlarás blacklist por meio de contas alternativas. \n- 3º Não enviarás conteúdo criminoso, >exageradamente< violento ou sexual nos Triggers e Comandos Customizáveis. \n- 4º Não enviarás nenhum tipo de propaganda/divulgação nos Comandos Customizáveis. \n- 5º Nunca forçarás o celeron do bot com comandos ou ações repetitivas com intuito de derrubar/prejudicar (coisa de bobão). \n\n Esses são alguns exemplos de regras. \n **Código open source -** [GitHub](https://www.github.com/Squaread/PleverBot)", color=0x992d22)
     embed_rulesPage.set_thumbnail(url="https://media.discordapp.net/attachments/1021215486979088475/1201201999258063050/25551989_376542819462618_7976604231910069571_n.png")
     embed_rulesPage.set_footer(text=f"{ctx.author} | {ctx.author.id}")
 
@@ -282,7 +304,7 @@ async def makecmd(ctx, *, cmd):
 
     parts = cmd.split("output:", 1)
     if len(parts) != 2:
-        await ctx.send(f'É assim que se faz, seu bobão - ``;makecmd input [invoker] output: [response]')
+        await ctx.send(f'É assim que se faz, seu bobão - ``;makecmd input [invoker] output: [response]``')
         return
 
     input_part, output_part = parts
@@ -310,9 +332,7 @@ async def makecmd(ctx, *, cmd):
     await ctx.channel.send(embed=embed_new_cmd)
     
     # Enviar log | Send log
-    log_channel = bot.get_channel(bot_log_channel)
-    embed_log = discord.Embed(title="Novo Comando", description=f"**Input:** ``{input_text}`` \n **Output:** ``{output_text}`` \n\n **Criador:** ``{ctx.author}`` | ``{ctx.author.id}`` \n **Server:** ``{ctx.guild}`` | ``{ctx.guild.id}``", color=0x1abc9c)
-    await log_channel.send(embed=embed_log)
+    await sendLog("Novo Comando", f"**Input:** ``{input_text}`` \n **Output:** ``{output_text}`` \n\n **Criador:** ``{ctx.author}`` | ``{ctx.author.id}`` \n **Server:** ``{ctx.guild}`` | ``{ctx.guild.id}``", 0x1abc9c)
 
 # Tratamento de erros do comando [makecmd] | # Command error handling [makecmd]
 @makecmd.error
@@ -384,9 +404,7 @@ async def maketrigger(ctx, *, trigger):
    await ctx.channel.send(embed=embed_new_trigger)
 
    # Enviar log | Send log
-   log_channel = bot.get_channel(bot_log_channel)
-   embed_log = discord.Embed(title="Trigger criado", description=f"**Input:** ``{input_text}`` \n **Output:** ``{output_text}`` \n **Exact:** ``{str(exact_text).lower()}`` \n\n **Criador:** ``{ctx.author}`` | ``{ctx.author.id}`` \n **Server:** ``{ctx.guild}`` | ``{ctx.guild.id}``", color=0x489cbd)
-   await log_channel.send(embed=embed_log)
+   await sendLog("Trigger criado", f"**Input:** ``{input_text}`` \n **Output:** ``{output_text}`` \n **Exact:** ``{str(exact_text).lower()}`` \n\n **Criador:** ``{ctx.author}`` | ``{ctx.author.id}`` \n **Server:** ``{ctx.guild}`` | ``{ctx.guild.id}``", 0x489cbd)
 
 # Tratamento de erros do comando [maketrigger] | # Command error handling [maketrigger]
 @maketrigger.error
@@ -414,11 +432,11 @@ async def deltrigger(ctx, *, trigger):
             
             with open(json_path, 'w', encoding='utf-8') as file:
                 json.dump(data_triggers, file, ensure_ascii=False ,indent=4)
-            await ctx.send(f'✅ | ``{trigger}`` deleted')
+            await ctx.send(f'✅ | ``{trigger}`` deletedo')
         else:
-            await ctx.send(f'Not found')
+            await ctx.send(f'Triger não encontrado')
     else:
-        await ctx.send(f'Not found')
+        await ctx.send(f'Error fatal')
 
 # Tratamento de erros do comando [deltrigger] | # Command error handling [deltrigger]
 @deltrigger.error
@@ -429,18 +447,16 @@ async def deltrigger_error(ctx, error):
         await ctx.send(f"Você não tem a permissão ``Gerenciar Servidor`` 🤭") 
     elif isinstance(error, commands.MissingRequiredArgument):
         await ctx.send(f"É assim que se faz, seu bobão - ``;deltrigger [trigger]") 
-
-          
+    
 # ==================== Comando cmd | Cmd command ====================
 @bot.hybrid_command(name="cmd", description="Veja as informações de um comando feito por alguém")
 async def cmd(ctx, *, command_name):
     command_name = ";" + command_name
-    print(command_name)
+   
     if command_name in custom_commands:
         command_data = custom_commands[command_name]
         author_id = command_data.get('author_id', 'Unknown')
         response_cmd = command_data.get('output', 'Unknown')
-
 
         try:
             author_cmd = await bot.fetch_user(int(author_id))
@@ -450,7 +466,7 @@ async def cmd(ctx, *, command_name):
         embed_cmdinfo = discord.Embed(title=command_name, description=f"**Criador:** ``{author_cmd}`` | ``{author_cmd.id}`` \n **Output:** ``{response_cmd}``", color=0x897ec2)
         await ctx.send(embed=embed_cmdinfo)
     else:
-        await ctx.send('Not found')
+        await ctx.send('Comando não encontrado')
 
 # ==================== Comando botinfo | Botinfo command ====================
 @bot.hybrid_command(name="botinfo", description="Minhas informações 😏")
@@ -461,7 +477,6 @@ async def botinfo(ctx):
    bot_guilds_quant = len(bot.guilds)
    bot_ping = round(bot.latency * 1000, 2)
    bot_name = bot.user.name
-   
    
    embed_bot_info = discord.Embed(title=f"{bot_name}", description=f"**<:servers:1077559867906195576>Servers:** {bot_guilds_quant} \n **<:tool:1076982009550872656>Custom commands:** {custom_commands_quant} \n **<:latency:1076964520506949642>Ping:** {bot_ping}ms  \n\n **<:discordpy:1162698533942595726>Discord.py:** {discord.__version__} \n **<:python:1076971789743292426>Python:** {platform.python_version().split(' ')[0]}", color=0x844fc4)
    embed_bot_info.set_thumbnail(url=bot.user.avatar)
@@ -497,28 +512,13 @@ async def block(ctx, id: str, *, reason: str=None):
    await ctx.send(embed=embed_ban)
 
    # Enviar log | Send log
-   log_channel = bot.get_channel(bot_log_channel)
-   await log_channel.send(embed=embed_ban)
+   await sendLog("Blacklist", f"`{target}`` foi adicionado a lista negra 😈 \n **Motivo:** {reason}", 0x992d22)
 
 # Tratamento de erros do comando [block] | # Command error handling [block]
 @block.error
 async def block_error(ctx):
    pass
  
-# ==================== Comando update | Update command ====================
-@bot.hybrid_command(name="update", description="Veja a atualização mais recente do bot")
-@commands.cooldown(1, 2, commands.BucketType.user)
-async def update(ctx):
-    embed_update = discord.Embed(title="Atualização mais Recente v0.7", description="Bugs no makecmd resolvidos\n **19/02/2024**", color=0x7289da)
-    embed_update.set_footer(text=f"{ctx.author} | {ctx.author.id}")
-    await ctx.send(embed=embed_update)
-
-# Tratamento de erros do comando [update] | # Command error handling [update]
-@update.error
-async def update_error(ctx, error):
-    if isinstance(error, commands.CommandOnCooldown):
-       await ctx.send(f"Quer explodir meu celeron baka?! - tente novamente em **{error.retry_after:.2f} segundos**", ephemeral=True)
-
 # ==================== Comando ativar | Ativar command ====================
 @bot.command(name="ativar")
 @commands.cooldown(1, 5, commands.BucketType.user)
@@ -622,4 +622,3 @@ asyncio.run(main())
     
 # -- RUN --
 bot.run(TOKEN) 
-
