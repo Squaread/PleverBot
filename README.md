@@ -1,5 +1,5 @@
 # PleverBot
-CleverBot lite para o Discord | CleverBot lite for Discord [IFUNNY]
+Bot baseado no CleverBot do iFunny para o Discord, com várias funcionalidades como o famoso "makecmd" e outras funções.
 
 Não tenho nenhuma relação com os desenvolvedores do CleverBot (do iFunny), esse código apenas tem funções inspiradas nas funcionalidades dele, Fan-Made. 
 
