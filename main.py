@@ -212,7 +212,7 @@ async def sync_error():
 @commands.cooldown(1, 5, commands.BucketType.user)
 async def ajuda(ctx):
 
- embed_mainPage = discord.Embed(title="Ajuda - Comandos Gerais", description="Muitos comandos são por prefixo e slash, alguns são somente prefixo para evitar poluição. Todo comando com slash também é prefixo, mas nem todo de prefixo é slash\n\n- **/ajuda** ``Explicação dos comandos e funções``\n- **/reagir [message_id] [emoji]** ``Bot reagir a uma mensagem``\n- **/bottle [message]** ``Envie uma mensagem para um servidor aleatório``\n- **/correio [user] [message]** ``Envie uma mensagem anônima para alguém num canal do servidor``\n- **/mesclar [word1] [word2]** ``Mescle 2 palavras diferentes``\n- **/update** ``Ver mudanças na versão mais recente do bot``", color=0x7289da)
+ embed_mainPage = discord.Embed(title="Ajuda - Comandos Gerais", description="Muitos comandos são por prefixo e slash, alguns são somente prefixo para evitar poluição. Todo comando com slash também é prefixo, mas nem todo de prefixo é slash\n\n- **/ajuda** ``Explicação dos comandos e funções``\n- **/bottle [message]** ``Envie uma mensagem para um servidor aleatório``\n- **/correio [user] [message]** ``Envie uma mensagem anônima para alguém num canal do servidor``\n- **/update** ``Ver mudanças na versão mais recente do bot``", color=0x7289da)
  embed_mainPage.set_thumbnail(url=bot.user.avatar)
  embed_mainPage.set_footer(text=f"{ctx.author} | {ctx.author.id}")
 
