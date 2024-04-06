@@ -30,7 +30,7 @@ A programação é bastante comentada, para que você possa modificar do jeito q
 Você deve mexer no arquivo de configuração (config.py) antes de executar o código, as instruções se encontram lá.
 
 ### Dependências
-Discord.py [2.3.2] - ``pip install pip install discord.py``
+Discord.py [2.3.2] - ``pip install discord.py``
 
 Pytz [2023.3] - ``pip install pytz``
 
