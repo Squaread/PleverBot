@@ -2,9 +2,10 @@
 import discord
 from discord.ext import commands, tasks
 import json
-import asyncio
 import random
+
 from config import bot_log_channel
+from config import bottle_interval
 
 servers_data= {}
 
@@ -20,12 +21,12 @@ class bottle(commands.Cog):
        self.bottleSystem.start()
 
     # BOTTLE SYSTEM 
-    @tasks.loop(minutes=20)
+    @tasks.loop(minutes=bottle_interval)
     async def bottleSystem(self):
      try:
       with open('servers_data.json', 'r', encoding='utf-8') as f:
             servers_data = json.load(f)
-      print("i")
+      
       for guild_id, config in servers_data["servers"].items():
          if config["bottle"]["enabled"]:
       
@@ -49,12 +50,10 @@ class bottle(commands.Cog):
                                        embed_bottle = discord.Embed(title="🌊 | Uma garrafa apareceu 😱", description=chosen_bottle, color=0x6CA9F8)
                                        embed_bottle.set_footer(icon_url=bottle_origin.icon, text=f"{bottle_origin.name} | {bottle_origin.id}")
                                        await channel.send(embed=embed_bottle)
-                                       print("[BOTTLE] Uma garrafa foi achada")
 
                                        for key, value in bottles.items():
                                           if value == chosen_bottle:
                                              bottles.pop(key)
-                                             print(bottles)
                                              break
                                  else:
                                     # Mesmo servidor do autor original | Same server as the original author - CANCELED
@@ -97,7 +96,6 @@ class bottle(commands.Cog):
         embed_log = discord.Embed(title="Nova Garrafa", description=f"**Mensagem:** ``{mensagem}`` \n\n **Criador:** ``{ctx.author}`` | ``{ctx.author.id}`` \n **Server:** ``{ctx.guild}`` | ``{ctx.guild.id}``", color=0x1abc9c)
         await log_channel.send(embed=embed_log)
         bottles[ctx.guild.id] = mensagem
-        print(bottles)
 
         await ctx.send(f"Garrafa lançada 🌊🌊\n``{mensagem}``")
     
