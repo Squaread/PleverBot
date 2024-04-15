@@ -42,6 +42,7 @@ bs4 [0.0.1] - ``pip install bs4``
 
 ## Avisos
 
+- O projeto não está 100% finalizado, a versão v1.0, que será lançada futuramente, vai trazer uma estabilidade melhor.
 - Use como um bot fechado, pois ele pode ser facilmente abusado.
 - Você deve ativar todas as intents do bot (PRESENCE INTENT, SERVER MEMBERS INTENT e MESSAGE CONTENT INTENT) para funcionar perfeitamente, [Discord Applications](https://discord.com/developers/applications).
 - O código NÃO possui um sistema de moderação automática nos comandos, então qualquer pessoa pode encher ele de porcarias. Por isso existe o sistema de logs, toda entrada é mostrada, qualquer coisa adicione o usuário a blacklist. Isso é de sua responsabilidade.
