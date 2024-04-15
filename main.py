@@ -8,12 +8,15 @@ import asyncio
 import platform
 from discord.ui import Button, View
 import json
+from bs4 import BeautifulSoup
+import requests
 
 # Importar configurações | Import config
 from config import TOKEN
 from config import bot_prefix
 from config import bot_log_channel
 
+ban_users = {}
 # ==== Carregar comandos customizados | Load custom commands ====
 try:
     with open('custom.json', 'r', encoding='utf-8') as json_file:
@@ -81,6 +84,9 @@ async def on_ready():
                 "mail": {
                     "enabled": False,
                     "channel_id": None
+                }, 
+                "poll": {
+                    "enabled": False
                 }
             }
 
@@ -130,16 +136,32 @@ async def on_guild_join(guild):
    embed_new_guild = discord.Embed(title="New guild", description=f"**Server:** ``{guild.name}`` | ``{guild.id}`` \n **Owner:** ``{guild.owner}`` | ``{guild.owner.id}`` \n **Members:** ``{guild.member_count}``", color=0x1f8b4c)
    await log_channel.send(embed=embed_new_guild)
 
-# ==================== Ignorar a mensagem CommandNotFound (alerta inutil e evita spam no console) | Ignore the CommandNotFound message (useless alert and avoids console spam) ====================
+# ========================= Tratamento de erros | Error handling =========================
 @bot.event
 async def on_command_error(ctx, error):
-    if isinstance(error, commands.CommandNotFound):
+    if isinstance(error, commands.CommandNotFound): # Command not found
         pass
+    elif isinstance(error, commands.CommandOnCooldown): # Cooldown
+      await ctx.send(f"Cooldown ``{error.retry_after:.2f} seconds``.")
+    elif isinstance(error, commands.MissingRequiredArgument): # Falta de parametro |Missing parameter
+        await ctx.send(f"Parameter error, see ``;help``.")
+    elif isinstance(error, commands.MissingPermissions): # Membro sem permissão | Member without permission
+        await ctx.send(f"You do not have permission ``" + "".join(error.missing_permissions) + "``.")
+    elif (hasattr(error, 'original')): 
+            original_error = error.original
+            if isinstance(original_error, discord.Forbidden) and '50013' in str(original_error):  
+                    try: await ctx.send("I don't have permission.")
+                    except: pass
+    else: # Desconhecido
+        print(f"FATAL ERROR -> {error}")
+        try: await ctx.send(error)
+        except: pass
 
 # ==================== Detectar mensagens enviadas no chat | Detect messages sent in chat ====================
 @bot.event
 async def on_message(message):
-    # Verificar se o usuario está na blacklist | Check if the user is on the blacklist
+    print(ban_users)
+    # Verificar se o usuario é um bot ou está na blacklist | Check if the user is a bot or blacklisted
     if message.author.bot or message.guild is None or str(message.author.id) in ban_users:
         return
     
@@ -163,14 +185,12 @@ async def on_message(message):
             for key, value in custom_commands.items():
              if i in key:      
               response = value['output']
-              #print(message_content, " | ", key, " ", response)
         
               key_split = key.split()
              
               if not "%arg" in response and message_content != key: 
                   pass
               
-    
               elif parts[:len(key_split)] == key_split:
                     argument = message_content.replace(key, '').strip()
                     
@@ -198,7 +218,6 @@ async def on_message(message):
                     # Enviar resposta | Send reply
                     await message.channel.send(response)
                     return
-             
               else:
                   pass
               
@@ -229,12 +248,12 @@ async def sendLog(title, description, color):
     except: # Caso ID invalido | Invalid ID case
         print("[LOGS SYSTEM] Error when sending message, check that the ID is correct and that the bot has permission on the channel.")
    
-# ==================== Comando de ajuda | Help command ====================
-@bot.hybrid_command(name="ajuda", description="Tutorial")
+# == PT-BR ==================== Comando de ajuda | Help command ==================== PT-BR ==
+@bot.command(aliases=['ajuda'])
 @commands.cooldown(1, 5, commands.BucketType.user)
-async def ajuda(ctx):
+async def help(ctx):
 
- embed_mainPage = discord.Embed(title="Ajuda - Comandos Gerais", description="Muitos comandos são por prefixo e slash, alguns são somente prefixo para evitar poluição. Todo comando com slash também é prefixo, mas nem todo de prefixo é slash\n\n- **/ajuda** ``Explicação dos comandos e funções``\n- **/bottle [message]** ``Envie uma mensagem para um servidor aleatório``\n- **/correio [user] [message]** ``Envie uma mensagem anônima para alguém num canal do servidor``", color=0x7289da)
+ embed_mainPage = discord.Embed(title="Ajuda - Comandos Gerais", description="Os comandos são por prefixo e alguns poucos por slash, muitos são somente prefixo para evitar poluição. Todo comando com slash também é prefixo, mas nem todo de prefixo é slash\n\n- **;help** ``Explicação dos comandos e funções.``\n- **;bottle [message]** ``Envie uma mensagem para um servidor aleatório.``\n- **;mail [user] [message]** ``Envie uma mensagem anônima para alguém num canal do servidor.``\n- **;img [search]** ``Pesquise imagens pela internet.``\n- **;quote [user]** ``Pega uma mensagem aleatório de um determinado membro num canal (últimas 300 mensagens).``\n- **/botinfo** ``Informações gerais do bot.``\n- **;poll [title]: [options]** ``Faça enquetes de até 10 opções, exemplo: ;poll Melhor comida: Arroz e feijão, Pizza, Batata Frita, Hamburguer``\n- **;vote [number]** ``Vote em enquentes pelo número da opção correspondente.``", color=0x7289da)
  embed_mainPage.set_thumbnail(url=bot.user.avatar)
  embed_mainPage.set_footer(text=f"{ctx.author} | {ctx.author.id}")
 
@@ -248,9 +267,10 @@ async def ajuda(ctx):
  button_modulePage = Button(label="Módulos", style=discord.ButtonStyle.green)
  async def button_modulePage_callback(interaction):
     
-    embed_modulePage = discord.Embed(title="Ajuda - Módulos & Funções", description="Os módulos e funções são adicionais que podem ser ativados ou desativados\n- **;ativar [module_code]** ``Ativar um módulo``\n- **;desativar [module_code]** ``Desativar um módulo``\n- **;config [module_code] [channel_id]** ``Configurar um módulo a um canal``", color=0xe91e63)
-    embed_modulePage.add_field(name="Correio anônimo", value="Envio de cartas anônimas num canal especificado\nCódigo: ``mail``\nComandos: ``/correio``")
-    embed_modulePage.add_field(name="Bottle", value="Permite enviar e receber cartas de outros servidores num canal especificado\nCódigo: ``bottle``\nComandos: ``/bottle``")
+    embed_modulePage = discord.Embed(title="Ajuda - Módulos & Funções", description="Os módulos e funções são adicionais que podem ser ativados ou desativados.\n- **;enable [module_code]** ``Ativar um módulo.``\n- **;disable [module_code]** ``Desativar um módulo.``\n- **;setchannel [module_code] [channel_id]** ``Configurar um módulo a um canal.``", color=0xe91e63)
+    embed_modulePage.add_field(name="Correio anônimo", value="Envio de cartas anônimas num canal especificado.\nCódigo: ``mail``\nComandos: ``;mail``")
+    embed_modulePage.add_field(name="Bottle", value="Permite enviar e receber cartas de outros servidores num canal especificado.\nCódigo: ``bottle``\nComandos: ``;bottle``")
+    embed_modulePage.add_field(name="Poll", value="Crie enquentes de até 10 opções, onde os membros poderão votar de forma anônima (não tem que ser configurado a um canal).\nCódigo: ``poll``\nComandos: ``;poll`` & ``;vote``")
     embed_modulePage.set_thumbnail(url=bot.user.avatar)
     embed_modulePage.set_footer(text=f"{ctx.author} | {ctx.author.id}")
 
@@ -262,8 +282,8 @@ async def ajuda(ctx):
  async def button_triggerMakecmdPage_callback(interaction):
     
     embed_triggerMakecmdPage = discord.Embed(title="Ajuda - Trigger & Makecmd", color=0xe91e63)
-    embed_triggerMakecmdPage.add_field(name="Trigger", value="- ``;maketrigger input: [trigger] output: [response] exact: [boolean (True or False)]``\n\n Cria um gatilho de texto que faz o bot enviar uma mensagem pré-definida. Se ``exact`` for False, ele será ativado mesmo se o gatilho estiver junto de outras palavras", inline=False)
-    embed_triggerMakecmdPage.add_field(name="Makecmd", value=f"- ``;makecmd input: [invoker] output: [response]``\n\n Parâmetros\n``%arg`` Obter o primeiro argumento após o invoker\n``%author`` Pegar quem acionou o comando\n``%random[number]`` Número aleatório de 1 até onde você limitou, exemplo: %random15 = 1 até 15\n``%randomMember`` Pegar um membro aleatório\n\n Exemplos:\n``;makecmd input: cavalos output: %author bebeu %random7 litros de água de cavalo``\n``;makecmd input: carlinhos output: %arg é %random100% carlinhos``\n\n ⛔ Evite colocar espaço nos invokers, tipo ``;make input: cavalos carlinhos output: vdd``. Pode acontecer comportamentos inesperados.", inline=False)
+    embed_triggerMakecmdPage.add_field(name="Trigger", value="- ``;maketrigger input: [trigger] output: [response] exact: [boolean (True or False)]``\n\n Cria um gatilho de texto que faz o bot enviar uma mensagem pré-definida. Se ``exact`` for False, ele será ativado mesmo se o gatilho estiver junto de outras palavras.", inline=False)
+    embed_triggerMakecmdPage.add_field(name="Makecmd", value=f"- ``;makecmd input: [invoker] output: [response]``\n\n Parâmetros\n``%arg`` Obter o primeiro argumento após o invoker.\n``%author`` Pegar quem acionou o comando.\n``%random[number]`` Número aleatório de 1 até onde você limitou, exemplo: %random15 = 1 até 15.\n``%randomMember`` Pegar um membro aleatório.\n\n Exemplos:\n``;makecmd input: cavalos output: %author bebeu %random7 litros de água de cavalo``\n``;makecmd input: carlinhos output: %arg é %random100% carlinhos``\n\n ⛔ Evite colocar espaço nos invokers, tipo ``;make input: cavalos carlinhos output: vdd``. Pode acontecer comportamentos inesperados.", inline=False)
     embed_triggerMakecmdPage.set_thumbnail(url=bot.user.avatar)
     embed_triggerMakecmdPage.set_footer(text=f"{ctx.author} | {ctx.author.id}")
 
@@ -281,30 +301,27 @@ async def ajuda(ctx):
     await interaction.response.edit_message(embed=embed_rulesPage)
  button_rulesPage.callback = button_rulesPage_callback
 
+ # Apagar menu | Delete menu
+ button_delete = Button(label="✖", style=discord.ButtonStyle.gray)
+ async def button_delete_callback(interaction):
+     await msg.delete()
+ button_delete.callback = button_delete_callback
+
  view = View()
  view.add_item(button_mainPage)
  view.add_item(button_modulePage)
  view.add_item(button_triggerMakecmdPage)
  view.add_item(button_rulesPage)
+ view.add_item(button_delete)
  msg = await ctx.send(embed=embed_mainPage, view=view)
-
-# Tratamento de erros do comando [ajuda] | # Command error handling [help]
-@ajuda.error
-async def ajuda_error(ctx, error):
-   print("error ", error)
-   if isinstance(error, commands.CommandOnCooldown):
-       await ctx.send(f"Quer explodir meu celeron baka?! - tente novamente em **{error.retry_after:.2f}** segundos**", ephemeral=True)
 
 # ==================== Comando makecmd | Makecmd command ====================
 @bot.command(name="makecmd")
 @commands.cooldown(1, 2, commands.BucketType.user)
 async def makecmd(ctx, *, cmd):
-    if str(ctx.author.id) in ban_users:
-        return
-
     parts = cmd.split("output:", 1)
     if len(parts) != 2:
-        await ctx.send(f'É assim que se faz, seu bobão - ``;makecmd input [invoker] output: [response]``')
+        await ctx.send(f"``;makecmd input [invoker] output: [response]``")
         return
 
     input_part, output_part = parts
@@ -313,7 +330,7 @@ async def makecmd(ctx, *, cmd):
     output_text = output_part.strip()
 
     if get_input in bot.all_commands:
-        await ctx.send(f'O comando ``{input_text}`` já é um comando nativo do bot 🤓☝️')
+        await ctx.send(f'The ``{input_text}`` command is already a native bot command 🤓☝️')
         return
     
     # Armazenar o comando customizado com o ID do autor | # Save the custom command with the author ID
@@ -327,42 +344,31 @@ async def makecmd(ctx, *, cmd):
         json.dump(custom_commands, json_file, ensure_ascii=False, indent=4)
 
     # Enviar mensagem confirmando o novo comando | Send message confirming the new command
-    embed_new_cmd = discord.Embed(title="Novo Comando", description=f"**Input:** ``{input_text}`` \n **Output:** ``{output_text}``", color=0x0c6940)
+    embed_new_cmd = discord.Embed(title="New command", description=f"**Input:** ``{input_text}`` \n **Output:** ``{output_text}``", color=0x0c6940)
     embed_new_cmd.set_footer(text=f"{ctx.author} | {ctx.author.id}")
     await ctx.channel.send(embed=embed_new_cmd)
     
     # Enviar log | Send log
-    await sendLog("Novo Comando", f"**Input:** ``{input_text}`` \n **Output:** ``{output_text}`` \n\n **Criador:** ``{ctx.author}`` | ``{ctx.author.id}`` \n **Server:** ``{ctx.guild}`` | ``{ctx.guild.id}``", 0x1abc9c)
-
-# Tratamento de erros do comando [makecmd] | # Command error handling [makecmd]
-@makecmd.error
-async def makecmd_error(ctx, error):
-   if isinstance(error, commands.CommandOnCooldown):
-       await ctx.send(f"Quer explodir meu celeron baka?! - tente novamente em **{error.retry_after:.2f} segundos**", ephemeral=True)
-   elif isinstance(error, commands.MissingRequiredArgument):
-    await ctx.send('É assim que se faz, seu bobão - ``;makecmd output: [invoker] output: [response]``')
+    await sendLog("New command", f"**Input:** ``{input_text}`` \n **Output:** ``{output_text}`` \n\n **Criador:** ``{ctx.author}`` | ``{ctx.author.id}`` \n **Server:** ``{ctx.guild}`` | ``{ctx.guild.id}``", 0x1abc9c)
 
 # ==================== Comando maketrigger | Maketrigger command ====================
 @bot.command(name="maketrigger")
 @commands.has_permissions(manage_guild = True)
 @commands.cooldown(1, 2, commands.BucketType.user)
 async def maketrigger(ctx, *, trigger):
-   if str(ctx.author.id) in ban_users:
-        return
-   
    parts = trigger.split("output:", 1)
    if trigger.startswith(bot_prefix):
-           await ctx.send(f'❌ | O ``input`` não pode começar com o prefixo do bot 🙄')
+           await ctx.send(f"The ``input`` cannot start with the bot prefix.")
    
    if len(parts) != 2:
-        await ctx.send('É assim que se faz, seu bobão - ``;maketrigger input: <invoker> output: <response> exact: <boolean (True ou False)>``')
+        await ctx.send("``;maketrigger input: <invoker> output: <response> exact: <boolean (True ou False)>``")
         return
    
    input_part, remaining_part = parts
    exact_parts = remaining_part.split("exact:", 1)
    
    if len(exact_parts) != 2:
-        await ctx.send('É assim que se faz, seu bobão - ``;maketrigger input: <invoker> output: <response> exact: <boolean (True ou False)>``')
+        await ctx.send("``;maketrigger input: <invoker> output: <response> exact: <boolean (True ou False)>``")
         return
 
    output_part, exact_part = exact_parts
@@ -399,25 +405,15 @@ async def maketrigger(ctx, *, trigger):
      json.dump(data_triggers, f, ensure_ascii=False, indent=4)
 
    # Enviar mensagem confirmando o novo trigger | Send message confirming the new trigger
-   embed_new_trigger = discord.Embed(title="Trigger criado", description=f"**Input:** ``{input_text}`` \n **Output:** ``{output_text}`` \n **Exact:** ``{str(exact_text).lower()}``", color=0x0c6940)
+   embed_new_trigger = discord.Embed(title="New trigger", description=f"**Input:** ``{input_text}`` \n **Output:** ``{output_text}`` \n **Exact:** ``{str(exact_text).lower()}``", color=0x0c6940)
    embed_new_trigger.set_footer(text=f"{ctx.author} | {ctx.author.id}")
    await ctx.channel.send(embed=embed_new_trigger)
 
    # Enviar log | Send log
-   await sendLog("Trigger criado", f"**Input:** ``{input_text}`` \n **Output:** ``{output_text}`` \n **Exact:** ``{str(exact_text).lower()}`` \n\n **Criador:** ``{ctx.author}`` | ``{ctx.author.id}`` \n **Server:** ``{ctx.guild}`` | ``{ctx.guild.id}``", 0x489cbd)
-
-# Tratamento de erros do comando [maketrigger] | # Command error handling [maketrigger]
-@maketrigger.error
-async def maketrigger_error(ctx, error):
-    if isinstance(error, commands.CommandOnCooldown):
-       await ctx.send(f"Quer explodir meu celeron baka?! - tente novamente em {error.retry_after:.2f} segundos")
-    elif isinstance(error, commands.MissingPermissions):
-        await ctx.send(f"Você não tem a permissão ``Gerenciar Servidor`` 🤭") 
-    elif isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send('É assim que se faz, seu bobão - ``;maketrigger input: <invoker> output: <response> exact: <boolean (True ou False)>``')
+   await sendLog("New trigger", f"**Input:** ``{input_text}`` \n **Output:** ``{output_text}`` \n **Exact:** ``{str(exact_text).lower()}`` \n\n **Creator:** ``{ctx.author}`` | ``{ctx.author.id}`` \n **Server:** ``{ctx.guild}`` | ``{ctx.guild.id}``", 0x489cbd)
 
 # ==================== Comando deltrigger | Deltrigger command ====================
-@bot.hybrid_command(name="deltrigger", description="[MOD] Deletar um trigger")
+@bot.command(name="deltrigger")
 @commands.has_permissions(manage_guild = True)
 @commands.cooldown(1, 2, commands.BucketType.user)
 async def deltrigger(ctx, *, trigger):
@@ -432,24 +428,15 @@ async def deltrigger(ctx, *, trigger):
             
             with open(json_path, 'w', encoding='utf-8') as file:
                 json.dump(data_triggers, file, ensure_ascii=False ,indent=4)
-            await ctx.send(f'✅ | ``{trigger}`` deletedo')
+            await ctx.send(f'✅ | ``{trigger}`` deleted')
         else:
-            await ctx.send(f'Triger não encontrado')
+            await ctx.send(f'Not found.')
     else:
-        await ctx.send(f'Error fatal')
-
-# Tratamento de erros do comando [deltrigger] | # Command error handling [deltrigger]
-@deltrigger.error
-async def deltrigger_error(ctx, error):
-    if isinstance(error, commands.CommandOnCooldown):
-       await ctx.send(f"Quer explodir meu celeron baka?! - tente novamente em **{error.retry_after:.2f} segundos**", ephemeral=True)
-    elif isinstance(error, commands.MissingPermissions):
-        await ctx.send(f"Você não tem a permissão ``Gerenciar Servidor`` 🤭") 
-    elif isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send(f"É assim que se faz, seu bobão - ``;deltrigger [trigger]") 
+        await ctx.send(f'Fatal error')
     
 # ==================== Comando cmd | Cmd command ====================
-@bot.hybrid_command(name="cmd", description="Veja as informações de um comando feito por alguém")
+@bot.command(name="cmd")
+@commands.cooldown(1, 2, commands.BucketType.user)
 async def cmd(ctx, *, command_name):
     command_name = ";" + command_name
    
@@ -463,16 +450,15 @@ async def cmd(ctx, *, command_name):
         except discord.errors.NotFound:
             author_cmd = 'Unknown'
  
-        embed_cmdinfo = discord.Embed(title=command_name, description=f"**Criador:** ``{author_cmd}`` | ``{author_cmd.id}`` \n **Output:** ``{response_cmd}``", color=0x897ec2)
+        embed_cmdinfo = discord.Embed(title=command_name, description=f"**Creator:** ``{author_cmd}`` | ``{author_cmd.id}`` \n **Output:** ``{response_cmd}``", color=0x897ec2)
         await ctx.send(embed=embed_cmdinfo)
     else:
-        await ctx.send('Comando não encontrado')
+        await ctx.send('Not found.')
 
 # ==================== Comando botinfo | Botinfo command ====================
-@bot.hybrid_command(name="botinfo", description="Minhas informações 😏")
+@bot.hybrid_command(name="botinfo")
 @commands.cooldown(1, 3, commands.BucketType.user)
 async def botinfo(ctx):
-   
    custom_commands_quant = len(custom_commands)
    bot_guilds_quant = len(bot.guilds)
    bot_ping = round(bot.latency * 1000, 2)
@@ -483,108 +469,84 @@ async def botinfo(ctx):
    embed_bot_info.set_footer(text=f"{ctx.author} | {ctx.author.id}")
    
    await ctx.send(embed=embed_bot_info)
-
-# Tratamento de erros do comando [botinfo] | # Command error handling [botinfo]
-@botinfo.error
-async def botinfo_error(ctx, error):
-   if isinstance(error, commands.CommandOnCooldown):
-       await ctx.send(f"Quer explodir meu celeron baka?! - tente novamente em **{error.retry_after:.2f} segundos**", ephemeral=True)
-       return
    
 # ==================== Comando block (blacklist) | Block command (blacklist) ====================
 @bot.command(name="block")
 @commands.is_owner()
 async def block(ctx, id: str, *, reason: str=None):
-   target_id = int(id)
+   global ban_users
    target = await bot.fetch_user(id)
    if reason == None:
-      reason = "Meia noite te conto (nenhum motivo definido)"
+      reason = "Idk" # Motivo padrão | Default reason
 
       with open('ban.json', 'r') as ban_file:
-        ban_users = json.load(ban_file)
-      ban_users[id] = True
+        ban_list = json.load(ban_file)
+      ban_list[id] = True
       
       with open('ban.json', 'w') as ban_file:
-        json.dump(ban_users, ban_file)
-   
-   embed_ban = discord.Embed(title="Blacklist", description=f"``{target}`` foi adicionado a lista negra 😈 \n **Motivo:** {reason}", color=0x992d22)
+        json.dump(ban_list, ban_file)
+      ban_users = ban_list  
+
+   embed_ban = discord.Embed(title="Blacklist", description=f"``{target}`` has been added to the blacklist 😈 \n **Reason:** {reason}", color=0x992d22)
    embed_ban.set_footer(text=f"{ctx.author} | {ctx.author.id}")
    await ctx.send(embed=embed_ban)
 
    # Enviar log | Send log
-   await sendLog("Blacklist", f"`{target}`` foi adicionado a lista negra 😈 \n **Motivo:** {reason}", 0x992d22)
-
-# Tratamento de erros do comando [block] | # Command error handling [block]
-@block.error
-async def block_error(ctx):
-   pass
+   await sendLog("Blacklist", f"`{target}`` has been added to the blacklist 😈 \n **Reason:** {reason}", 0x992d22)
  
 # ==================== Comando ativar | Ativar command ====================
-@bot.command(name="ativar")
+@bot.command(aliases=['ativar'])
 @commands.cooldown(1, 5, commands.BucketType.user)
 @commands.has_permissions(manage_guild=True)
-async def ativar(ctx, module: str):
-    modules = ["mail", "bottle"]
+async def enable(ctx, module: str):
+    modules = ["mail", "bottle", "poll"]
     if not module in modules:
-        await ctx.send("Código do módulo incorreto 😡")
+        await ctx.send("Module not found.")
         return
     
     if module == "mail":
         servers_data["servers"][str(ctx.guild.id)]["mail"]["enabled"] = True
     elif module == "bottle":
         servers_data["servers"][str(ctx.guild.id)]["bottle"]["enabled"] = True    
+    elif module == "poll":
+        servers_data["servers"][str(ctx.guild.id)]["poll"]["enabled"] = True 
     upServerData()
-    await ctx.send(f"``{module}`` foi ativado. Não esqueça de configurar usando ;config\nhttps://media.discordapp.net/attachments/1021215486979088475/1201541071168098344/image.png")
-
-# Tratamento de erros do comando [ativar] | # Command error handling [ativar]
-@ativar.error
-async def ativar_error(ctx, error):
-    if isinstance(error, commands.CommandOnCooldown):
-        await ctx.send(f"Quer explodir meu celeron baka?! - tente novamente em **{error.retry_after:.2f} segundos**", ephemeral=True)
-    elif isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send(f"É assim que se faz, seu bobão - ``;ativar [module_code]``")
-    elif isinstance(error, commands.MissingPermissions):
-        await ctx.send(f"Você não tem a permissão ``Gerenciar Servidor`` 🤭") 
+    await ctx.send(f"``{module}`` has been enabled, don't forget to configure ``;setchannel {module} [channel_id]``")
 
 # ==================== Comando desativar | Desativar command ====================
-@bot.command(name="desativar")
+@bot.command(aliases=['desativar'])
 @commands.cooldown(1, 5, commands.BucketType.user)
 @commands.has_permissions(manage_guild=True)
-async def desativar(ctx, module: str):
-    modules = ["mail", "bottle"]
+async def disable(ctx, module: str):
+    modules = ["mail", "bottle", "poll"]
     if not module in modules:
-        await ctx.send("Código do módulo incorreto 😡")
+        await ctx.send("Module not found.")
         return
     
     if module == "mail":
         servers_data["servers"][str(ctx.guild.id)]["mail"]["enabled"] = False
     elif module == "bottle":
-        servers_data["servers"][str(ctx.guild.id)]["bottle"]["enabled"] = False    
+        servers_data["servers"][str(ctx.guild.id)]["bottle"]["enabled"] = False   
+    elif module == "poll":
+        servers_data["servers"][str(ctx.guild.id)]["poll"]["enabled"] = False 
     upServerData()
-    await ctx.send(f"``{module}`` foi desativado")
-
-# Tratamento de erros do comando [desativar] | # Command error handling [desativar]
-@desativar.error
-async def desativar_error(ctx, error):
-    if isinstance(error, commands.CommandOnCooldown):
-        await ctx.send(f"Quer explodir meu celeron baka?! - tente novamente em **{error.retry_after:.2f} segundos**", ephemeral=True)
-    elif isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send(f"É assim que se faz, seu bobão - ``;desativar [module_code]``")
-    elif isinstance(error, commands.MissingPermissions):
-        await ctx.send(f"Você não tem a permissão ``Gerenciar Servidor`` 🤭") 
+    await ctx.send(f"``{module}`` has been disabled.")
         
 # ==================== Comando config | Config command ====================
-@bot.command(name="config")
+@bot.command(name="setchannel")
 @commands.cooldown(1, 5, commands.BucketType.user)
 @commands.has_permissions(manage_guild=True)
-async def config(ctx, module: str, channel_id: str):
+async def setchannel(ctx, module: str, channel_id: str):
     modules = ["mail", "bottle"]
     if not module in modules:
-        await ctx.send("Código do módulo incorreto 😡")
+        await ctx.send("Module not found.")
         return
-    channel = await bot.fetch_channel(channel_id)
+    
+    try: channel = await bot.fetch_channel(channel_id)
+    except: channel = None
+
     if not channel:
-        await ctx.send("Não tenho permissões pra ver ou o canal não existe 😰", ephemeral=True)
+        await ctx.send("Bro I don't have permission or this channel doesn't exist.")
         return
     
     if module == "mail":
@@ -593,25 +555,53 @@ async def config(ctx, module: str, channel_id: str):
         servers_data["servers"][str(ctx.guild.id)]["bottle"]["channel_id"] = int(channel_id)    
     upServerData()
     await ctx.send(f"**{module}** foi configurado para ``{channel_id}``")
-
-# Tratamento de erros do comando [config] | # Command error handling [config]
-@config.error
-async def config_error(ctx, error):
-    if isinstance(error, commands.CommandOnCooldown):
-        await ctx.send(f"Quer explodir meu celeron baka?! - tente novamente em **{error.retry_after:.2f} segundos**", ephemeral=True)
-    elif isinstance(error, commands.MissingRequiredArgument):
-        await ctx.send(f"É assim que se faz, seu bobão - ``;config [module_code] [channel_id]``")
-    elif isinstance(error, commands.MissingPermissions):
-        await ctx.send(f"Você não tem a permissão ``Gerenciar Servidor`` 🤭") 
-    else:
-        await ctx.send("Não tenho permissões pra ver ou o canal não existe 😰", ephemeral=True)
     
+# ==================== Comando img | Img command ====================
+@bot.command(name="img")
+@commands.cooldown(1, 3, commands.BucketType.user)
+async def img(ctx, *,search: str):
+    url = f"https://www.bing.com/images/search?q={search}"
+    search_response = requests.get(url)
+    soup = BeautifulSoup(search_response.content, "html.parser")
 
+    img_tag = soup.find("img", class_="mimg")
+    if img_tag:
+        image_url = img_tag["src"]
+        image_response = requests.get(image_url)
+
+        if image_response.ok: 
+           with open(f'{ctx.author.id}.png', 'wb') as f: # Salvar imagem temporariamente | Temporarily save image
+            f.write(image_response.content)
+
+           with open(f"{ctx.author.id}.png", "rb") as f: # Enviar imagem | Send image
+                pic = discord.File(f)
+                await ctx.send(file=pic)
+           os.remove(f"{ctx.author.id}.png") # Deletar imagem | Delete image
+        else:
+            await ctx.send("Error.")
+    else:
+        await ctx.send("Not found.")
+
+# ==================== Comando quote | Quote command ====================
+@bot.command(name="quote")
+@commands.cooldown(1, 3, commands.BucketType.user)
+async def quote(ctx, user: discord.Member):
+    messages = []
+    async for message in ctx.channel.history(limit=300):
+        messages.append(message)
+    
+    user_messages = [msg.content for msg in messages if msg.author.id == user.id]
+
+    if user_messages:
+        random_message = random.choice(user_messages)
+        await ctx.send(random_message)
+    else:
+        await ctx.send(f'None.')
 
 # ==================== Carregar cogs | Load cogs ====================
 async def load_cogs():
     print("[ 💠 ] Loading cogs")
-    initial_extensions = ['modules.mail', 'modules.bottle']
+    initial_extensions = ['modules.mail', 'modules.bottle', 'modules.poll']
     for extension in initial_extensions:
         await bot.load_extension(extension)
 
