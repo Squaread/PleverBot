@@ -1,9 +1,9 @@
 # PleverBot
 Bot baseado no CleverBot do iFunny para o Discord, com várias funcionalidades como o famoso "makecmd" e outras funções.
 
-Não tenho nenhuma relação com os desenvolvedores do CleverBot (do iFunny), esse código apenas tem funções inspiradas nas funcionalidades dele, Fan-Made. 
+Não tem nenhuma relação com os desenvolvedores do CleverBot (do iFunny), esse código apenas tem funções inspiradas nas funcionalidades dele. 
 
-Contém funções que não são comuns nos bots do Discord, entre elas a possibilidade de fazer comandos customizaveis, triggers, jogar garrafas, poll (enquete), etc.
+Contém funções que não são comuns nos bots do Discord, entre elas a possibilidade ilimitada dos membros de fazer comandos customizaveis, triggers, jogar garrafas, poll (enquete), etc.
 
 ## Comandos/Funcionalidades
 * ``;maketrigger input: [trigger] output: [response] exact: [boolean (True or False)]`` - Crie comandos personalizados (com parâmetros)
@@ -23,7 +23,7 @@ Contém funções que não são comuns nos bots do Discord, entre elas a possibi
 **Módulos** 
 
 Os módulos são funcionalidades que você pode ativar ou desativar separadamente (``;bottle``, ``;mail``, ``poll``)
-* ``;setchannel [module_code] [channel_id`` - Ver a configuração dos módulos no servidor
+* ``;setchannel [module_code] [channel_id`` - Selecionar um canal para um determinado módulo usar (bottle e mail).
 * ``;enable [module_code]`` - Ativar um módulo
 * ``;disable [module_code]`` - Desativar um módulo
 
@@ -42,13 +42,10 @@ bs4 [0.0.1] - ``pip install bs4``
 
 ## Avisos
 
-- O projeto não está 100% finalizado, a versão v1.0, que será lançada futuramente, vai trazer uma estabilidade melhor.
-- Use como um bot fechado, pois ele pode ser facilmente abusado.
+- O bot original faz parte de uma rede de comunidades pre-selecionadas, ele foi pensado em ser algo selecionado, não 100% público.
 - Você deve ativar todas as intents do bot (PRESENCE INTENT, SERVER MEMBERS INTENT e MESSAGE CONTENT INTENT) para funcionar perfeitamente, [Discord Applications](https://discord.com/developers/applications).
-- O código NÃO possui um sistema de moderação automática nos comandos, então qualquer pessoa pode encher ele de porcarias. Por isso existe o sistema de logs, toda entrada é mostrada, qualquer coisa adicione o usuário a blacklist. Isso é de sua responsabilidade.
-- A única forma de ver o criador de comandos anônimos é por meio do registro das logs.
-- O código NÃO foi feito com a intenção de se tornar algo sério, então espere algumas gambiarras ali e aqui.
-- Mais uma vez falando, esse projeto não tem nenhum ligamento com o CleverBot, considere isso como uma Fan-Made.
+- O script NÃO possui um sistema de moderação automática nos comandos, então qualquer pessoa pode encher ele de porcarias. Por isso existe o sistema de logs, toda entrada é mostrada, qualquer coisa adicione o usuário a blacklist. Isso é de sua responsabilidade.
+- A única forma de ver o autor das mensagens anônimas (mail) é por meio do registro das logs.
 
 > Projeto livre, faça o que quiser com o código. Se encontrar algum bug, por favor me avise ;]
 
