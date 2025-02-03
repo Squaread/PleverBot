@@ -7,6 +7,8 @@ import random
 from config import bot_log_channel
 from config import bottle_interval
 
+from functions import Load_ServersData
+
 servers_data = {}
 
 class bottle(commands.Cog):
@@ -73,7 +75,7 @@ class bottle(commands.Cog):
 
     # ==================== Comando bottle | Bottle command ====================
     @commands.command(name="bottle")
-    @commands.cooldown(1, 3600, commands.BucketType.guild) # Aqui você pode mudar o cooldown | Here you can change the cooldown - Default: 3600
+    @commands.cooldown(1, 3600, commands.BucketType.guild) # Aqui você pode mudar o cooldown | Here you can change the cooldown - Default: 3600 (seconds)
     async def bottle(self, ctx, *,mensagem: str):
     
         with open('servers_data.json', 'r', encoding='utf-8') as f:
@@ -83,13 +85,13 @@ class bottle(commands.Cog):
         status_bottle = server_data["bottle"]["enabled"]
         
         if status_bottle == False:
-           await ctx.send("**bottle** is disabled on this server - ``;help``")
+           await ctx.send("**bottle** está desativado - ``;help``")
            return
         
         channelId_bottle = server_data["bottle"]["channel_id"]
         channel_bottle = self.bot.get_channel(channelId_bottle)
         if not channel_bottle:
-            await ctx.send("The server must have a channel configured to receive bottles before it can send.")
+            await ctx.send("**❌ |** Esse servidor precisa ter um canal configurado para receber bottles antes de poder enviar uma - ``;help``.")
             return
 
         # Enviar log | Send log
@@ -99,9 +101,7 @@ class bottle(commands.Cog):
 
         # Enviar bottle | Send bottle
         bottles[ctx.guild.id] = mensagem
-        await ctx.send(f"Bottle sent 🌊🌊\n``{mensagem}``")
-
-
+        await ctx.send(f"Garrafa lançada ao mar 🌊🌊\n``{mensagem}``")
 
 # ======================================================================
 async def setup(bot: commands.Bot):

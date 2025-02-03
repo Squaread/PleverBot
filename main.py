@@ -4,6 +4,7 @@ import json
 import random
 import os
 import re
+import io
 import asyncio
 import platform
 from discord.ui import Button, View
@@ -16,53 +17,27 @@ from config import TOKEN
 from config import bot_prefix
 from config import bot_log_channel
 
-ban_users = {}
-# ==== Carregar comandos customizados | Load custom commands ====
-try:
-    with open('custom.json', 'r', encoding='utf-8') as json_file:
-         custom_commands = json.load(json_file)
-         print("\n [ ✅ ] Custom commands loaded - custom.json \n")
+from functions import Load_CustomCommands
+from functions import Load_ServersData
+from functions import Load_Triggers
+from functions import Load_Blacklist
 
-except FileNotFoundError:
-    custom_commands = {}
-    print("\n [ ❌ ] FileNotFoundError - custom.json \n")
+from functions import UpCustomCommand
+from functions import UpServerData
+from functions import UpTrigger
+from functions import UpBlacklist
 
-# ==== Carregar blacklist | Load blacklist ====
-try:
-    with open('ban.json', 'r') as ban_file:
-        ban_users = json.load(ban_file)
-        print("\n [ ✅ ] Blacklist loaded - ban.json \n")  
+# ===== Carregar dados / Load data =====
+servers_data = Load_ServersData()
+custom_commands = Load_CustomCommands()
+ban_users = Load_Blacklist()
 
-except FileNotFoundError:
-    ban_users = {}
-    print("\n [ ❌ ] FileNotFoundError - ban.json \n")
-
-# ==== Carregar dados dos servidores | Load server data ====
-try:
-    with open('servers_data.json', 'r', encoding='utf-8') as f:
-        servers_data = json.load(f)
-        print("\n [ ✅ ] Servers data loaded - servers_data.json \n")  
-
-except FileNotFoundError:
-    servers_data = {"servers": {}}
-    print("\n [ ❌ ] FileNotFoundError - servers_data.json \n")
-
-# ==================== Atualizar dados dos servidores no json | Update server data in json ====================
-def upServerData():
-    try:
-        with open('servers_data.json', 'w') as file:
-            json.dump(servers_data, file, indent=2)
-
-    except:
-        print("\n [ ❌ ] ERROR - servers_data.json \n")
-        
 # ============================================================ Bot ============================================================
 bot = commands.Bot(command_prefix =bot_prefix, intents=discord.Intents.all())
 
 # Primeiras ações | First actions
 @bot.event
 async def on_ready():
-
     print(f"Bot online {bot.user}")
     try:
      await bot.tree.sync()
@@ -91,7 +66,7 @@ async def on_ready():
             }
 
     # Atualizara dados servers_data.json | Update data servers_data.json
-    upServerData()
+    UpServerData(servers_data)
 
     # Modificar status do bot, por exemplo, fazer aparecer que ele tá jogando um jogo | Modify the bot's status, for example, make it appear that it is playing a game
     async def change_activity():
@@ -129,8 +104,7 @@ async def on_guild_join(guild):
         }
     }
    
-   with open('servers_data.json', 'w') as file:
-        json.dump(servers_data, file, indent=2)
+   UpServerData(servers_data)
 
    log_channel = await bot.fetch_channel(bot_log_channel)
    embed_new_guild = discord.Embed(title="New guild", description=f"**Server:** ``{guild.name}`` | ``{guild.id}`` \n **Owner:** ``{guild.owner}`` | ``{guild.owner.id}`` \n **Members:** ``{guild.member_count}``", color=0x1f8b4c)
@@ -142,15 +116,15 @@ async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound): # Command not found
         pass
     elif isinstance(error, commands.CommandOnCooldown): # Cooldown
-      await ctx.send(f"Cooldown ``{error.retry_after:.2f} seconds``.")
+      await ctx.send(f"**⌛ |** Cooldown ``{error.retry_after:.2f} segundos``.")
     elif isinstance(error, commands.MissingRequiredArgument): # Falta de parametro |Missing parameter
-        await ctx.send(f"Parameter error, see ``;help``.")
+        await ctx.send(f"**❌ |** Parameter error, veja ``;help``.")
     elif isinstance(error, commands.MissingPermissions): # Membro sem permissão | Member without permission
-        await ctx.send(f"You do not have permission ``" + "".join(error.missing_permissions) + "``.")
+        await ctx.send(f"**❌ |** You do not have permission ``" + "".join(error.missing_permissions) + "``.")
     elif (hasattr(error, 'original')): 
             original_error = error.original
             if isinstance(original_error, discord.Forbidden) and '50013' in str(original_error):  
-                    try: await ctx.send("I don't have permission.")
+                    try: await ctx.send("**❌ |** Eu não tenho permissões o suficiente para fazer essa ação.")
                     except: pass
     else: # Desconhecido
         print(f"FATAL ERROR -> {error}")
@@ -160,15 +134,13 @@ async def on_command_error(ctx, error):
 # ==================== Detectar mensagens enviadas no chat | Detect messages sent in chat ====================
 @bot.event
 async def on_message(message):
-    print(ban_users)
     # Verificar se o usuario é um bot ou está na blacklist | Check if the user is a bot or blacklisted
     if message.author.bot or message.guild is None or str(message.author.id) in ban_users:
         return
     
     message_content = message.content
-    json_path = os.path.join('triggers', f'{message.guild.id}.json')
     
-    # Caso a mensagem conter um comando padrão do bot | If the message contains a standard bot command
+    # Caso a mensagem contém um comando padrão do bot | If the message contains a standard bot command
     try:
      if message_content.split()[0].replace(bot_prefix, '') in bot.all_commands: 
        await bot.process_commands(message)
@@ -202,10 +174,7 @@ async def on_message(message):
                     except:
                         pass
 
-                    if argument == '':
-                        pass
-
-                    else:
+                    if argument != '':
                      response = response.replace('%arg', f'{argument}')
 
                     response = response.replace('%author', f'{message.author.display_name}')
@@ -221,18 +190,17 @@ async def on_message(message):
               else:
                   pass
               
-    # Verificar se é um trigger | Check if it is a trigger
-    elif os.path.exists(json_path):
-     with open(json_path, 'r',  encoding='utf-8') as file:
-      data_triggers = json.load(file)
-      for key, value in data_triggers.items():
-            if value["exact"] and key.lower() == message_content.lower():
-                output = value["output"]
-                await message.channel.send(output)
+    # Verificar se é um trigger | Check if it is a trigger 
+    else:
+     triggers = Load_Triggers()
+     guild_id = str(message.guild.id)
+     if guild_id in triggers:
+        for key, value in triggers[guild_id].items():
+            if value["exact"] and key.lower() == message_content:
+                await message.channel.send(value["output"])
                 break
-            elif not value["exact"] and key.lower() in message_content.lower():
-                output = value["output"]
-                await message.channel.send(output)
+            elif not value["exact"] and key.lower() in message_content:
+                await message.channel.send(value["output"])
                 break
     
     await bot.process_commands(message)    
@@ -330,7 +298,7 @@ async def makecmd(ctx, *, cmd):
     output_text = output_part.strip()
 
     if get_input in bot.all_commands:
-        await ctx.send(f'The ``{input_text}`` command is already a native bot command 🤓☝️')
+        await ctx.send(f"**❌ |** ``{input_text}`` já é um comando nativo do bot 🤓☝️")
         return
     
     # Armazenar o comando customizado com o ID do autor | # Save the custom command with the author ID
@@ -339,9 +307,7 @@ async def makecmd(ctx, *, cmd):
         'author_id': str(ctx.author.id)
     }
     
-    # Salvar no json | Save in json
-    with open('custom.json', 'w', encoding='utf-8') as json_file:
-        json.dump(custom_commands, json_file, ensure_ascii=False, indent=4)
+    UpCustomCommand(custom_commands)
 
     # Enviar mensagem confirmando o novo comando | Send message confirming the new command
     embed_new_cmd = discord.Embed(title="New command", description=f"**Input:** ``{input_text}`` \n **Output:** ``{output_text}``", color=0x0c6940)
@@ -356,61 +322,36 @@ async def makecmd(ctx, *, cmd):
 @commands.has_permissions(manage_guild = True)
 @commands.cooldown(1, 2, commands.BucketType.user)
 async def maketrigger(ctx, *, trigger):
-   parts = trigger.split("output:", 1)
-   if trigger.startswith(bot_prefix):
-           await ctx.send(f"The ``input`` cannot start with the bot prefix.")
-   
-   if len(parts) != 2:
-        await ctx.send("``;maketrigger input: <invoker> output: <response> exact: <boolean (True ou False)>``")
+    parts = trigger.split("output:", 1)
+    if trigger.startswith(bot_prefix):
+        await ctx.send(f"**❌ |** O ``invoker`` não pode conter o prefixo do bot.")
         return
-   
-   input_part, remaining_part = parts
-   exact_parts = remaining_part.split("exact:", 1)
-   
-   if len(exact_parts) != 2:
+
+    if len(parts) != 2:
         await ctx.send("``;maketrigger input: <invoker> output: <response> exact: <boolean (True ou False)>``")
         return
 
-   output_part, exact_part = exact_parts
-   input_text = input_part.replace("input:", "").strip()
-   output_text = output_part.strip()
-   exact_text = exact_part.strip().lower()
+    input_part, remaining_part = parts
+    exact_parts = remaining_part.split("exact:", 1)
 
-   guild_id = ctx.guild.id
-   author_id = ctx.author.id
+    if len(exact_parts) != 2:
+        await ctx.send("``;maketrigger input: <invoker> output: <response> exact: <boolean (True ou False)>``")
+        return
 
-   if exact_text == 'false':
-      exact_text = False
+    output_part, exact_part = exact_parts
+    input_text = input_part.replace("input:", "").strip()
+    output_text = output_part.strip()
+    exact_text = exact_part.strip().lower()
 
-   # Salvar o novo trigger | Save the new trigger
-   new_trigger = {
-    input_text: {
-        "output": output_text,
-        "exact": bool(exact_text),
-        "guild_id": str(guild_id),
-        "author_id": str(author_id)
-     }
-   }
-   json_path = os.path.join('triggers', f'{guild_id}.json')
-   
-   if os.path.exists(json_path):
-    with open(json_path, 'r',  encoding='utf-8') as file:
-      data_triggers = json.load(file)
-   else:
-      data_triggers = new_trigger
+    guild_id = str(ctx.guild.id)
+    author_id = str(ctx.author.id)
 
-   data_triggers.update(new_trigger)
-   # Salvar no json | Save in json
-   with open(json_path, 'w', encoding='utf-8') as f:
-     json.dump(data_triggers, f, ensure_ascii=False, indent=4)
+    exact_value = exact_text == "true"
 
-   # Enviar mensagem confirmando o novo trigger | Send message confirming the new trigger
-   embed_new_trigger = discord.Embed(title="New trigger", description=f"**Input:** ``{input_text}`` \n **Output:** ``{output_text}`` \n **Exact:** ``{str(exact_text).lower()}``", color=0x0c6940)
-   embed_new_trigger.set_footer(text=f"{ctx.author} | {ctx.author.id}")
-   await ctx.channel.send(embed=embed_new_trigger)
+    # Atualizar o JSON com a nova trigger
+    UpTrigger(guild_id, input_text, output_text, exact_value, author_id)
 
-   # Enviar log | Send log
-   await sendLog("New trigger", f"**Input:** ``{input_text}`` \n **Output:** ``{output_text}`` \n **Exact:** ``{str(exact_text).lower()}`` \n\n **Creator:** ``{ctx.author}`` | ``{ctx.author.id}`` \n **Server:** ``{ctx.guild}`` | ``{ctx.guild.id}``", 0x489cbd)
+    await ctx.send(f"**✅ |** Trigger criado: `{input_text}` → `{output_text}`")
 
 # ==================== Comando deltrigger | Deltrigger command ====================
 @bot.command(name="deltrigger")
@@ -430,9 +371,9 @@ async def deltrigger(ctx, *, trigger):
                 json.dump(data_triggers, file, ensure_ascii=False ,indent=4)
             await ctx.send(f'✅ | ``{trigger}`` deleted')
         else:
-            await ctx.send(f'Not found.')
+            await ctx.send(f'Não encontrado.')
     else:
-        await ctx.send(f'Fatal error')
+        await ctx.send(f'Fatal error.')
     
 # ==================== Comando cmd | Cmd command ====================
 @bot.command(name="cmd")
@@ -445,15 +386,13 @@ async def cmd(ctx, *, command_name):
         author_id = command_data.get('author_id', 'Unknown')
         response_cmd = command_data.get('output', 'Unknown')
 
-        try:
-            author_cmd = await bot.fetch_user(int(author_id))
-        except discord.errors.NotFound:
-            author_cmd = 'Unknown'
+        try: author_cmd = await bot.fetch_user(int(author_id))
+        except discord.errors.NotFound: author_cmd = 'Unknown'
  
-        embed_cmdinfo = discord.Embed(title=command_name, description=f"**Creator:** ``{author_cmd}`` | ``{author_cmd.id}`` \n **Output:** ``{response_cmd}``", color=0x897ec2)
+        embed_cmdinfo = discord.Embed(title=command_name, description=f"**Criador:** ``{author_cmd}`` | ``{author_cmd.id}`` \n **Output:** ``{response_cmd}``", color=0x897ec2)
         await ctx.send(embed=embed_cmdinfo)
     else:
-        await ctx.send('Not found.')
+        await ctx.send("Não encontrado.")
 
 # ==================== Comando botinfo | Botinfo command ====================
 @bot.hybrid_command(name="botinfo")
@@ -479,20 +418,15 @@ async def block(ctx, id: str, *, reason: str=None):
    if reason == None:
       reason = "Idk" # Motivo padrão | Default reason
 
-      with open('ban.json', 'r') as ban_file:
-        ban_list = json.load(ban_file)
-      ban_list[id] = True
-      
-      with open('ban.json', 'w') as ban_file:
-        json.dump(ban_list, ban_file)
-      ban_users = ban_list  
+      ban_users[id] = True
+      UpBlacklist(ban_users)
 
-   embed_ban = discord.Embed(title="Blacklist", description=f"``{target}`` has been added to the blacklist 😈 \n **Reason:** {reason}", color=0x992d22)
+   embed_ban = discord.Embed(title="Blacklist", description=f"``{target}`` foi adicionado na blacklist 😈 \n **Reason:** {reason}", color=0x992d22)
    embed_ban.set_footer(text=f"{ctx.author} | {ctx.author.id}")
    await ctx.send(embed=embed_ban)
 
    # Enviar log | Send log
-   await sendLog("Blacklist", f"`{target}`` has been added to the blacklist 😈 \n **Reason:** {reason}", 0x992d22)
+   await sendLog("Blacklist", f"`{target}`` foi adicionado na blacklist 😈 \n **Reason:** {reason}", 0x992d22)
  
 # ==================== Comando ativar | Ativar command ====================
 @bot.command(aliases=['ativar'])
@@ -501,17 +435,16 @@ async def block(ctx, id: str, *, reason: str=None):
 async def enable(ctx, module: str):
     modules = ["mail", "bottle", "poll"]
     if not module in modules:
-        await ctx.send("Module not found.")
+        await ctx.send(f"**❌ |** Eita, parece que ``{module}`` não existe!")
         return
     
-    if module == "mail":
-        servers_data["servers"][str(ctx.guild.id)]["mail"]["enabled"] = True
-    elif module == "bottle":
-        servers_data["servers"][str(ctx.guild.id)]["bottle"]["enabled"] = True    
-    elif module == "poll":
-        servers_data["servers"][str(ctx.guild.id)]["poll"]["enabled"] = True 
-    upServerData()
-    await ctx.send(f"``{module}`` has been enabled, don't forget to configure ``;setchannel {module} [channel_id]``")
+    servers_data["servers"][str(ctx.guild.id)][module]["enabled"] = True
+    UpServerData(servers_data)
+
+    if module != "poll":
+        await ctx.send(f"**:white_check_mark: |** ``{module}`` foi ativado! Não se esqueça de configurar o canal ``;setchannel {module} [channel_id]``.")
+    else:
+        await ctx.send(f"``{module}`` foi ativado!")
 
 # ==================== Comando desativar | Desativar command ====================
 @bot.command(aliases=['desativar'])
@@ -520,17 +453,13 @@ async def enable(ctx, module: str):
 async def disable(ctx, module: str):
     modules = ["mail", "bottle", "poll"]
     if not module in modules:
-        await ctx.send("Module not found.")
+        await ctx.send(f"**❌ |** Eita, parece que ``{module}`` não existe!")
         return
     
-    if module == "mail":
-        servers_data["servers"][str(ctx.guild.id)]["mail"]["enabled"] = False
-    elif module == "bottle":
-        servers_data["servers"][str(ctx.guild.id)]["bottle"]["enabled"] = False   
-    elif module == "poll":
-        servers_data["servers"][str(ctx.guild.id)]["poll"]["enabled"] = False 
-    upServerData()
-    await ctx.send(f"``{module}`` has been disabled.")
+    servers_data["servers"][str(ctx.guild.id)][module]["enabled"] = False
+    UpServerData(servers_data)
+
+    await ctx.send(f"``{module}`` foi desativado.")
         
 # ==================== Comando config | Config command ====================
 @bot.command(name="setchannel")
@@ -539,27 +468,21 @@ async def disable(ctx, module: str):
 async def setchannel(ctx, module: str, channel_id: str):
     modules = ["mail", "bottle"]
     if not module in modules:
-        await ctx.send("Module not found.")
+        await ctx.send(f"**❌ |** Eita, parece que ``{module}`` não é válido!")
         return
     
-    try: channel = await bot.fetch_channel(channel_id)
-    except: channel = None
+    try: await bot.fetch_channel(channel_id)
+    except: return await ctx.send(f"**❌ |** Eu não tenho permissão nesse canal ou ele não existe ~~~assim como seu pai.~~")
 
-    if not channel:
-        await ctx.send("Bro I don't have permission or this channel doesn't exist.")
-        return
-    
-    if module == "mail":
-        servers_data["servers"][str(ctx.guild.id)]["mail"]["channel_id"] = int(channel_id)
-    elif module == "bottle":
-        servers_data["servers"][str(ctx.guild.id)]["bottle"]["channel_id"] = int(channel_id)    
-    upServerData()
+    servers_data["servers"][str(ctx.guild.id)][module]["channel_id"] = int(channel_id) 
+    UpServerData(servers_data)
+
     await ctx.send(f"**{module}** foi configurado para ``{channel_id}``")
     
 # ==================== Comando img | Img command ====================
 @bot.command(name="img")
 @commands.cooldown(1, 3, commands.BucketType.user)
-async def img(ctx, *,search: str):
+async def img(ctx, *, search: str):
     url = f"https://www.bing.com/images/search?q={search}"
     search_response = requests.get(url)
     soup = BeautifulSoup(search_response.content, "html.parser")
@@ -569,18 +492,14 @@ async def img(ctx, *,search: str):
         image_url = img_tag["src"]
         image_response = requests.get(image_url)
 
-        if image_response.ok: 
-           with open(f'{ctx.author.id}.png', 'wb') as f: # Salvar imagem temporariamente | Temporarily save image
-            f.write(image_response.content)
-
-           with open(f"{ctx.author.id}.png", "rb") as f: # Enviar imagem | Send image
-                pic = discord.File(f)
-                await ctx.send(file=pic)
-           os.remove(f"{ctx.author.id}.png") # Deletar imagem | Delete image
+        if image_response.ok:
+            image_bytes = io.BytesIO(image_response.content)  
+            file = discord.File(image_bytes, filename="image.png") 
+            await ctx.send(file=file)
         else:
-            await ctx.send("Error.")
+            await ctx.send("**❌ |** Erro ao procurar.")
     else:
-        await ctx.send("Not found.")
+        await ctx.send("Nada encontrado.")
 
 # ==================== Comando quote | Quote command ====================
 @bot.command(name="quote")
@@ -596,7 +515,7 @@ async def quote(ctx, user: discord.Member):
         random_message = random.choice(user_messages)
         await ctx.send(random_message)
     else:
-        await ctx.send(f'None.')
+        await ctx.send(f"Nadinha, assim como o sentido da vida. 🤖")
 
 # ==================== Carregar cogs | Load cogs ====================
 async def load_cogs():

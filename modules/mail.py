@@ -4,6 +4,8 @@ from discord.ext import commands
 import json
 from config import bot_log_channel
 
+from functions import Load_ServersData
+
 servers_data = {}
 
 class mail(commands.Cog):
@@ -16,24 +18,19 @@ class mail(commands.Cog):
     async def mail(self, ctx, destinatario: discord.Member, *,mensagem: str):
         target = destinatario
     
-        with open('servers_data.json', 'r', encoding='utf-8') as f:
-         servers_data = json.load(f)
+        servers_data = Load_ServersData()
 
         server_data = servers_data["servers"][str(ctx.guild.id)]
         status_mail = server_data["mail"]["enabled"]
         
         if status_mail == False:
-           await ctx.send("**mail** is disabled on this server - ``;help``")
+           await ctx.send("**mail** está desativado - ``;help``")
            return
         
-        
         channelId_mail = server_data["mail"]["channel_id"]
-        
-        
-    
         channel_mail = self.bot.get_channel(channelId_mail)
         if not channel_mail:
-            await ctx.send("I don't have permissions to view it or the configured channel doesn't exist.")
+            await ctx.send(f"**❌ |** [MAIL] Eu não tenho permissão no canal configurado ou ele não existe ~~~configurou errado fdp.~~")
             return
 
         # Enviar log | Send log
@@ -42,12 +39,9 @@ class mail(commands.Cog):
         await log_channel.send(embed=embed_log)
 
         # Enviar correio | Send mail
-        embed_mail = discord.Embed(title="📧 | Anonymous mail ", description=f"Recipient: {target.mention}\n\n{mensagem}", color=0x9B533B)
-        await channel_mail.send(f"{target.mention} You received a letter 😨",embed=embed_mail)
+        embed_mail = discord.Embed(title="📧 | Correio Anônimo", description=f"Destinatário: {target.mention}\n\n{mensagem}", color=0x9B533B)
+        await channel_mail.send(f"{target.mention} Você recebeu uma carta 😨",embed=embed_mail)
         await ctx.message.delete()
-
-
-    
 
 # ======================================================================
 async def setup(bot: commands.Bot):

@@ -5,7 +5,6 @@ import json
 import random
 
 from config import bot_log_channel
-from config import bottle_interval
 
 polls = {}
 
@@ -31,8 +30,8 @@ def display_poll(poll):
             percentage = 0
         bar_length = int(percentage * 15)
         progress_bar = '█' * bar_length + ' ' * (10 - bar_length)
-        poll_embed.add_field(name=f"{emoji} {option['option']}", value=f"Votes: {votes} ({percentage:.0%})\n{progress_bar}", inline=False)
-        poll_embed.set_footer(text=f"Use ;vote [number] to vote")
+        poll_embed.add_field(name=f"{emoji} {option['option']}", value=f"Votos: {votes} ({percentage:.0%})\n{progress_bar}", inline=False)
+        poll_embed.set_footer(text=f"Use ;vote [number] para votar")
      return poll_embed
 
 
@@ -53,7 +52,7 @@ class poll(commands.Cog):
      status_poll = server_data["poll"]["enabled"]
         
      if status_poll == False:
-        await ctx.send("**poll** is disabled on this server - ``;help``")
+        await ctx.send("**poll** está desativado - ``;help``")
         return
      
      # Caso não tiver nenhum parametro, uma poll ativa será mostrada | If there are no parameters, an active poll will be shown
@@ -63,12 +62,12 @@ class poll(commands.Cog):
         poll_embed = display_poll(poll)
         await ctx.send(embed=poll_embed) # Mostrar poll | Show poll
       else: # Caso nenhuma poll ativa | If no poll is active
-        await ctx.send("There is no poll in progress.")
+        await ctx.send("Não há uma poll ativa.")
      
      title, options_text = message.split(":", 1)
      options_list = options_text.split(',')
      if len(options_list) > 10: # Limitar opções | Limit options
-            await ctx.send("The maximum number of options is 10.")
+            await ctx.send("**❌ |** O número máximo de opções é 10.")
             return
         
      poll = create_poll(title.strip(), options_list)
@@ -85,7 +84,7 @@ class poll(commands.Cog):
     @commands.command()
     async def vote(self, ctx, option_number: int):
         if ctx.guild.id not in polls:
-            await ctx.send("There is no poll in progress.")
+            await ctx.send("Não há uma poll ativa.")
             return
     
         poll = polls[ctx.guild.id]
