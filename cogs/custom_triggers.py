@@ -79,5 +79,5 @@ class custom_triggers(commands.Cog):
 
 # ======================================================================
 async def setup(bot: commands.Bot):
-    print("[ ✅ ] Cogs bot_admin")
+    print("[ ✅ ] Cogs custom_triggers")
     await bot.add_cog(custom_triggers(bot))
