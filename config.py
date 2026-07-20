@@ -1,9 +1,9 @@
-bot_prefix = ';' # Bot prefix
+bot_prefix = ';' # Prefixo do bot
 
-TOKEN = "" # Bot token
+TOKEN = "" # Token do bot
 
-# Tenha certeza que o bot tem acesso ao canal, se não vai resultar em erros | Make sure the bot has access to the channel, otherwise errors will result
-bot_log_channel = 0 # Deixe 0 para desativar as logs (não recomendado) | Enter 0 to disable logs (not recommended)
+# Tenha certeza que o bot tem acesso ao canal, se não vai resultar em erros
+bot_log_channel = 0 # Deixe 0 para desativar as logs
 
-# Intervalo de envio entre cada garrafa (minutos) | Shipping interval between bottles (minutes)
-bottle_interval = 20 
+# Intervalo do loop do destino das garrafas (minutos)
+bottle_interval = 20
