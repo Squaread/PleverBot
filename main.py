@@ -94,9 +94,7 @@ async def on_guild_join(guild):
     }
    UpServerData(state.servers_data)
 
-   log_channel = await bot.fetch_channel(bot_log_channel)
-   embed_new_guild = discord.Embed(title="Novo server", description=f"**Server:** `{guild.name}` | `{guild.id}` \n **Owner:** `{guild.owner}` | `{guild.owner.id}` \n **Members:** `{guild.member_count}`", color=0x1f8b4c)
-   await log_channel.send(embed=embed_new_guild)
+   await logger(bot, "Novo server", f"**Server:** `{guild.name}` | `{guild.id}` \n **Owner:** `{guild.owner}` | `{guild.owner.id}` \n **Members:** `{guild.member_count}`", 0x1f8b4c)
 
 # ========================= Tratamento de erros =========================
 @bot.event
